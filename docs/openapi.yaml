@@ -1,0 +1,228 @@
+openapi: 3.0.3
+info:
+  title: RAG Application API
+  description: |
+    Retrieval-Augmented Generation (RAG) API that accepts user questions and returns
+    contextually-grounded answers using Azure OpenAI.
+
+    **How it works:**
+    1. User submits a question
+    2. System generates an embedding for the question
+    3. Retrieves top 2 most similar documents from vector store
+    4. Augments LLM prompt with retrieved context
+    5. Returns answer along with source documents
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+tags:
+  - name: RAG
+    description: Retrieval-Augmented Generation operations
+
+paths:
+  /ask:
+    post:
+      tags:
+        - RAG
+      summary: Ask a question
+      description: |
+        Submit a question and receive a contextually-grounded answer using RAG.
+
+        The system will:
+        - Generate an embedding for your question
+        - Retrieve semantically similar documents
+        - Query the LLM with augmented context
+        - Return the answer with source documents
+      operationId: askQuestion
+      requestBody:
+        description: Question to be answered
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuestionRequest'
+            examples:
+              simple_question:
+                summary: Simple question
+                value:
+                  question: "What is Spring Boot?"
+              complex_question:
+                summary: Complex question
+                value:
+                  question: "How does dependency injection work in Spring Framework?"
+      responses:
+        '200':
+          description: Successful response with answer and relevant documents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RagResponse'
+              examples:
+                success_response:
+                  summary: Successful answer
+                  value:
+                    question: "What is Spring Boot?"
+                    answer: "Spring Boot is a framework that simplifies the development of Spring applications by providing auto-configuration and embedded servers."
+                    relevant_documents:
+                      - "Spring Boot is an open-source Java framework used for creating microservices."
+                      - "Spring Boot provides auto-configuration and eliminates boilerplate code."
+        '400':
+          description: Bad Request - Invalid or empty question
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                empty_question:
+                  summary: Empty question
+                  value:
+                    status: 400
+                    message: "Question cannot be empty"
+                    error_code: "INVALID_REQUEST"
+                    timestamp: "2024-01-18T10:30:45.123Z"
+                null_request:
+                  summary: Null request
+                  value:
+                    status: 400
+                    message: "Request cannot be null"
+                    error_code: "INVALID_REQUEST"
+                    timestamp: "2024-01-18T10:30:45.123Z"
+        '500':
+          description: Internal Server Error - Vector store operation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                vector_store_error:
+                  summary: Vector store error
+                  value:
+                    status: 500
+                    message: "Failed to retrieve similar documents"
+                    error_code: "VECTOR_STORE_ERROR"
+                    timestamp: "2024-01-18T10:30:45.123Z"
+                internal_error:
+                  summary: Generic internal error
+                  value:
+                    status: 500
+                    message: "An unexpected error occurred"
+                    error_code: "INTERNAL_ERROR"
+                    timestamp: "2024-01-18T10:30:45.123Z"
+        '503':
+          description: Service Unavailable - Azure OpenAI service is down or unresponsive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                embedding_error:
+                  summary: Embedding generation failed
+                  value:
+                    status: 503
+                    message: "Failed to generate embedding for question"
+                    error_code: "EMBEDDING_ERROR"
+                    timestamp: "2024-01-18T10:30:45.123Z"
+                llm_error:
+                  summary: LLM query failed
+                  value:
+                    status: 503
+                    message: "Failed to get response from LLM"
+                    error_code: "LLM_ERROR"
+                    timestamp: "2024-01-18T10:30:45.123Z"
+
+components:
+  schemas:
+    QuestionRequest:
+      type: object
+      required:
+        - question
+      properties:
+        question:
+          type: string
+          description: The question to be answered
+          minLength: 1
+          example: "What is Spring Boot?"
+      description: Request payload containing the user's question
+
+    RagResponse:
+      type: object
+      required:
+        - question
+        - answer
+        - relevant_documents
+      properties:
+        question:
+          type: string
+          description: The original question that was asked
+          example: "What is Spring Boot?"
+        answer:
+          type: string
+          description: The generated answer based on retrieved context
+          example: "Spring Boot is a framework that simplifies the development of Spring applications by providing auto-configuration and embedded servers."
+        relevant_documents:
+          type: array
+          description: List of documents that were retrieved and used as context (top 2 most similar)
+          items:
+            type: string
+          example:
+            - "Spring Boot is an open-source Java framework used for creating microservices."
+            - "Spring Boot provides auto-configuration and eliminates boilerplate code."
+          minItems: 0
+          maxItems: 2
+      description: Successful response containing the answer and source documents
+
+    ErrorResponse:
+      type: object
+      required:
+        - status
+        - message
+        - error_code
+        - timestamp
+      properties:
+        status:
+          type: integer
+          description: HTTP status code
+          example: 400
+          enum: [ 400, 500, 503 ]
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Question cannot be empty"
+        error_code:
+          type: string
+          description: Machine-readable error code for programmatic handling
+          example: "INVALID_REQUEST"
+          enum:
+            - INVALID_REQUEST
+            - EMBEDDING_ERROR
+            - LLM_ERROR
+            - VECTOR_STORE_ERROR
+            - INTERNAL_ERROR
+        timestamp:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the error occurred
+          example: "2024-01-18T10:30:45.123Z"
+      description: Error response structure for all error scenarios
+
+  examples:
+    SimpleQuestion:
+      summary: A simple factual question
+      value:
+        question: "What is Java?"
+
+    TechnicalQuestion:
+      summary: A technical question about the stack
+      value:
+        question: "How does cosine similarity work in vector search?"
+
+    SuccessfulAnswer:
+      summary: Successful response with context
+      value:
+        question: "What is Java?"
+        answer: "Java is a high-level, object-oriented programming language developed by Sun Microsystems."
+        relevant_documents:
+          - "Java is a popular programming language used for building enterprise applications."
+          - "Java runs on the JVM (Java Virtual Machine) and is platform-independent."
